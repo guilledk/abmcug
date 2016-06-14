@@ -1,6 +1,6 @@
-end=0
+#!/bin/sh
 
-while [ $end -eq 0 ]; do
+while true; do
 	clear
 	cat menus/main
 	read -p "~$ " op
@@ -13,12 +13,12 @@ while [ $end -eq 0 ]; do
 			;;
 		2)
 			clear
-			echo "Grupos"
+			./grp.sh
 			read
 			;;
 		0)
 			clear
-			end=1
+			break
 			;;
 		*)
 			clear

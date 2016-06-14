@@ -1,6 +1,5 @@
-#!/bin/bash
-SYNTAX_ERROR="Opcion invalida."
-ENTER_CONTINUE="[ENTER] para continuar."
+#!/bin/sh
+. ./libamc.sh
 
 alta () {
 	
@@ -23,10 +22,12 @@ alta () {
 		id -u $usr_name >/dev/null 2>/dev/null
 		usr_exists=$?
 		if [ $usr_exists -eq 0 ]; then
-			read -p "El usuario ya existe, repetir?('n' cancela)" op
-			if [ "$op" == "n" ]; then
-				return 1
-			fi
+			yndialog "El usuario ya existe, repetir? (y/n):"
+			case $? in
+				1)
+					return 1
+					;;
+			esac
 		else
 			break
 		fi
@@ -34,104 +35,80 @@ alta () {
 
 	#Directorio
 	usr_od=false
-	while true; do
-		read -p "Desea especificar el directorio? (y/n/c): " op
-		if [ "$op" == "y" ]; then
+	yncdialog "Desea especificar el directorio? (y/n/c): "
+	case $? in
+		0)
 			read -p "Ingrese directorio 'home': " usr_dir
 			usr_od=true
-			break
-		elif [ "$op" == "n" ]; then
-			break
-		elif [ "$op" == "c" ]; then
+			;;
+		2)
 			return 1
-		else
-			echo "$SYNTAX_ERROR"
-		fi
-	done	
+			;;
+	esac	
 	
 	#Crear Directorio
 	usr_omd=false
-	while true; do
-		read -p "Desea crear el directorio? (y/n/c): " op
-		if [ "$op" == "y" ]; then
-			usr_omd=true
-			break
-		elif [ "$op" == "n" ]; then
-			break
-		elif [ "$op" == "c" ]; then
+	yncdialog "Desea crear el directorio? (y/n/c): "
+	case $? in
+		0)
+			user_omd=true
+			;;
+		2)
 			return 1
-		else
-			echo "$SYNTAX_ERROR"
-		fi
-	done
+			;;
+	esac
 
 	#Grupo principal
 	usr_oG=false
-	while true; do
-		read -p "Desea especificar el grupo principal? (y/n/c): " op
-		if [ "$op" == "y" ]; then
+	yncdialog "Desea especificar el grupo principal? (y/n/c): "
+	case $? in
+		0)
 			read -p "Ingrese el nombre del grupo: " usr_G
 			usr_oG=true
-			break
-		elif [ "$op" == "n" ]; then
-			break
-		elif [ "$op" == "c" ]; then
+			;;
+		2)
 			return 1
-		else
-			echo "$SYNTAX_ERROR"
-		fi
-	done
+			;;
+	esac
 	
 	#Grupo secundario
 	usr_og=false
-	while true; do
-		read -p "Desea especificar el grupo secundario? (y/n/c): " op
-		if [ "$op" == "y" ]; then
+	yncdialog "Desea especificar el grupo secundario? (y/n/c): "
+	case $? in
+		0)
 			read -p "Ingrese el nombre del grupo: " usr_g
 			usr_og=true
-			break
-		elif [ "$op" == "n" ]; then
-			break
-		elif [ "$op" == "c" ]; then
+			;;
+		2)
 			return 1
-		else
-			echo "$SYNTAX_ERROR"
-		fi
-	done
+			;;
+	esac
 
 	#Comentario
 	usr_oc=false
-	while true; do
-		read -p "Desea agregar un comentario? (y/n/c): " op
-		if [ "$op" == "y" ]; then
+	yncdialog "Desea agregar un comentario? (y/n/c): "
+	case $? in
+		0)
 			read -p "Ingrese el comentario: " usr_c
 			usr_oc=true
-			break
-		elif [ "$op" == "n" ]; then
-			break
-		elif [ "$op" == "c" ]; then
+			;;
+		2)
 			return 1
-		else
-			echo "$SYNTAX_ERROR"
-		fi
-	done
-
+			;;
+	esac
+	
 	#Shell
 	usr_os=false
-	while true; do
-		read -p "Desea especificar el shell? (y/n/c): " op
-		if [ "$op" == "y" ]; then
+	yncdialog "Desea especificar el shell? (y/n/c): "
+	case $? in
+		0)
 			read -p "Ingrese shell: " usr_s
 			usr_os=true
-			break
-		elif [ "$op" == "n" ]; then
-			break
-		elif [ "$op" == "c" ]; then
+			;;
+		2)
 			return 1
-		else
-			echo "$SYNTAX_ERROR"
-		fi
-	done
+			;;
+	esac
 
 	final="useradd "
 	if $usr_od; then
@@ -202,8 +179,7 @@ alta () {
 			echo "No se pudo actualizar mapeado SELinux."
 			;;
 	esac
-	read -p "$ENTER_CONTINUE"
-
+	read -p "$ENTER_CONTINUE" in
 	return 0	
 
 }
@@ -217,27 +193,25 @@ baja () {
 		if [ $usr_exists -eq 0 ]; then
 			break
 		else
-			read -p "El usuario no existe, repetir?('n' cancela)" op
-			if [ "$op" == "n" ]; then
-				return 1
-			fi
+			yndialog "El usuario no existe, repetir? (y/n):"
+			case $? in
+				1)
+					return 1
+					;;
+			esac
 		fi
 	done
 
 	total=false
-	while true; do
-		read -p "Desea borrar 'home' del usuario? (y/n/c): " op
-		if [ "$op" == "y" ]; then
+	yncdialog "Desea borrar 'home' del usuario? (y/n/c): "
+	case $? in
+		0)
 			total=true
-			break
-		elif [ "$op" == "n" ]; then
-			break
-		elif [ "$op" == "c" ]; then
+			;;
+		2)
 			return 1
-		else
-			echo "$SYNTAX_ERROR"
-		fi
-	done
+			;;
+	esac
 
 	final="userdel "
 	if $total; then
@@ -275,7 +249,7 @@ baja () {
 			echo "No se pudo borrar directorio 'home'."
 			;;
 	esac
-	read -p "$ENTER_CONTINUE"
+	read -p "$ENTER_CONTINUE" in
 	return 0
 
 }
@@ -601,7 +575,7 @@ modificar () {
 			*)
 				#error
 				echo "$SYNTAX_ERROR"
-				read -p "$ENTER_CONTINUE"
+				read -p "$ENTER_CONTINUE" in
 				;;	
 		esac
 	done
@@ -710,7 +684,7 @@ consulta () {
 						echo "Usuario no encontrado."
 					fi
 				fi
-				read -p "$ENTER_CONTINUE"
+				read -p "$ENTER_CONTINUE" in
 				;;
 			0)
 				clear
@@ -718,7 +692,7 @@ consulta () {
 				;;
 			*)	
 				echo "$SYNTAX_ERROR"
-				read -p "$ENTER_CONTINUE"
+				read -p "$ENTER_CONTINUE" in
 				;;
 		esac
 	done
