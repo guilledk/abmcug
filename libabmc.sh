@@ -3,6 +3,7 @@
 SYNTAX_ERROR="Opcion invalida."
 ENTER_CONTINUE="[ENTER] para continuar."
 
+#deprecated
 readpasswd () { #(1: display text) -> (void)
 	stty -echo
 	printf >&2 "$1"

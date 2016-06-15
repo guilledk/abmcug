@@ -1,5 +1,5 @@
 #!/bin/sh
-. ./libamc.sh
+. "$PWD/libabmc.sh"
 
 alta () {
 	
@@ -137,6 +137,13 @@ alta () {
 		0)
 			#0: success
 			echo "Usuario creado correctamente."
+			#Password
+			yndialog "Desea agregar una clave de acceso? (y/n): "
+			case $? in
+				0)
+					passwd $usr_name	
+					;;
+			esac
 			;;
 		1)
 			#1: can't update password file
@@ -179,6 +186,7 @@ alta () {
 			echo "No se pudo actualizar mapeado SELinux."
 			;;
 	esac
+
 	read -p "$ENTER_CONTINUE" in
 	return 0	
 
@@ -277,10 +285,12 @@ modificar () {
 		if [ $usr_exists -eq 0 ]; then
 			break
 		else
-			read -p "El usuario no existe, repetir?('n' cancela)" op
-			if [ "$op" == "n" ]; then
-				return 1
-			fi
+			yndialog "El usuario no existe, repetir? (y/n):"
+			case $? in
+				1)
+					return 1
+					;;
+			esac
 		fi
 	done
 	#flags para construir el comando
@@ -298,6 +308,7 @@ modificar () {
 	usr_groups="" #lista de grupos a agregar
 	while true; do
 		clear
+
 		passwd -S $usr_name | grep " L " -c >/dev/null 2>/dev/null
 		locked=$?
 		if [ $locked -eq 1 ]; then
@@ -305,7 +316,17 @@ modificar () {
 		else
 			cat menus/user-mod-l
 		fi
+		shadow_line=$(grep "^${usr_name}:" /etc/shadow)
+		pass=$(echo $shadow_line | cut -d: -f2)
+		if [ "$pass" = "!" ] || [ "$pass" = "*" ]; then
+			pprotected=false
+			echo "Este usuario no tiene una clave asignada! se recomienda agregar una."
+		else
+			pprotected=true
+		fi
+		
 		echo "Modificando: '$usr_name'"
+
 		if $usr_oc || $usr_od || $usr_on || $usr_ol || $usr_ou || $usr_oG || $usr_og || $usr_os; then
 			echo "[Tiene cambios sin aplicar]"
 		fi
@@ -325,21 +346,16 @@ modificar () {
 				#home
 				clear
 				read -p "Ingrese nuevo 'home' para el usuario: " usr_d
-				while true; do
-					read -p "Desea mover los archivos del usuario al nuevo 'home'? (y/n/c): " op
-					if [ "$op" == "y" ]; then
+				yncdialog  "Desea mover los archivos del usuario al nuevo 'home'? (y/n/c): "
+				case $? in
+					0)	
 						usr_od=true
 						usr_om=true
-						break
-					elif [ "$op" == "n" ]; then
+						;;
+					1)
 						usr_od=true
-						break
-					elif [ "$op" == "c" ]; then
-						break
-					else
-						echo "$SYNTAX_ERROR"
-					fi
-				done
+						;;
+				esac
 				;;
 			3)
 				#login
@@ -349,21 +365,22 @@ modificar () {
 				;;
 			4)
 				#bloquear/desbloquear
-				while true; do
+				if $pprotected; then
 					if [ $locked -eq 0 ]; then
-						read -p "Desea desbloquear la cuenta? (y/n): " op
+						yndialog "Desea desbloquear la cuenta? (y/n): "
 					else
-						read -p "Desea bloquear la cuenta? (y/n): " op
+						yndialog "Desea bloquear la cuenta? (y/n): "
 					fi
-					if [ "$op" == "y" ]; then
-						usr_ol=true
-						break
-					elif [ "$op" == "n" ]; then
-						break
-					else
-						echo "$SYNTAX_ERROR"
-					fi
-				done
+					case $? in
+						0)
+							usr_ol=true
+							;;
+					esac
+				else
+					clear
+					echo "Esta cuenta no tiene una clave de acceso, por lo tanto no se puede bloquear/desbloquear."
+					read -p "$ENTER_CONTINUE" cont
+				fi
 				;;
 			5)
 				#uid
@@ -375,10 +392,12 @@ modificar () {
 						usr_ou=true
 						break
 					else
-						read -p "El valor ingresado no es un numero valido, repetir? (n, cancela): " op
-						if [ "$op" == "n" ]; then
-							break
-						fi
+						yndialog "El valor ingresado no es un numero valido, repetir? (y/n): "
+						case $? in
+							1)
+								break
+								;;
+						esac
 					fi
 				done
 				;;
@@ -388,17 +407,12 @@ modificar () {
 				new_groups=""
 				if ! [ -z "$usr_groups" ]; then
 					echo "Parece que se han ingresado grupos pero no se han aplicado."
-					read -p "Desea descartar los grupos anteriormente ingresados? (y/n): " op
-					while true; do
-						if [ "$op" == "y" ]; then
+					yndialog "Desea descartar los grupos anteriormente ingresados? (y/n): "
+					case $? in
+						0)
 							usr_groups=""
-							break
-						elif [ "$op" == "n" ]; then
-							break
-						else
-							echo "$SYNTAX_ERROR"
-						fi
-					done	
+							;;
+					esac
 				fi
 				echo "A continuacion se pedira que ingrese los grupos uno a uno"
 				group_num=1
@@ -412,15 +426,13 @@ modificar () {
 						else
 							new_groups="$new_group"
 						fi
-						((group_num++))
+						group_num=$((group_num + 1))
 					fi
 
 					finish=false
-					read -p "Desea seguir agregando grupos? (y/n/c): " op
-					while true; do
-						if [ "$op" == "y" ]; then
-							break
-						elif [ "$op" == "n" ]; then
+					yncdialog  "Desea seguir agregando grupos? (y/n/c): "
+					case $? in
+						1)
 							if ! [ -z "$new_groups" ]; then
 								if ! [ -z "$usr_groups" ]; then
 									usr_groups="$usr_groups,$new_groups"
@@ -430,14 +442,11 @@ modificar () {
 								usr_oG=true
 							fi
 							finish=true
-							break
-						elif [ "$op" == "c" ]; then
+							;;
+						2)
 							finish=true
-							break
-						else
-							echo "$SYNTAX_ERROR"
-						fi
-					done
+							;;
+					esac
 					if $finish; then break; fi
 				done
 				if ! [ -z "$new_groups" ]; then
@@ -449,17 +458,21 @@ modificar () {
 					echo "[A] - Agregar al final"
 					while true; do
 						read -p "~$ " op
-						if [ "$op" == "S" ]; then
-							break
-						elif [ "$op" == "A" ]; then
-							usr_oa=true
-							break
-						else
-							echo "$SYNTAX_ERROR"
-						fi
+						case "$op" in
+							S)
+								break
+								;;
+							A)
+								usr_oa=true
+								break
+								;;
+							*)
+								echo "$SYNTAX_ERROR"
+								;;
+						esac
 					done
 				fi
-				read -p "$ENTER_CONTINUE"
+				read -p "$ENTER_CONTINUE" in
 				;;
 			7)	
 				#gid
@@ -469,24 +482,19 @@ modificar () {
 					if [ $(grep -c -E "^$usr_group:" /etc/group) -eq 0 ] && [ $(grep -c -E ":$usr_group:" /etc/group) -eq 0 ]; then
 						echo "Grupo '$usr_group' no existe."
 						finish=false
-						while true; do
-							read -p "Desea intentarlo de nuevo? (y/n): " op
-							if [ "$op" == "y" ]; then
-								break
-							elif [ "$op" == "n" ]; then
+						yndialog "Desea intentarlo de nuevo? (y/n): "
+						case $? in
+							1)
 								finish=true
-								break	
-							else
-								echo "$SYNTAX_ERROR"
-							fi
-						done
+								;;
+						esac
 						if $finish; then break; fi
 					else
 						usr_og=true
 						break
 					fi
 				done		
-				read -p "$ENTER_CONTINUE"				
+				read -p "$ENTER_CONTINUE" in				
 				;;
 			8)
 				#shell
@@ -495,6 +503,10 @@ modificar () {
 				usr_os=true
 				;;
 			9)
+				clear
+				passwd $usr_name
+				;;
+			10)
 				#evaluar cambios
 				clear
 				final="usermod "
@@ -546,17 +558,12 @@ modificar () {
 					final="$final -s $usr_s"
 				fi
 				final="$final $usr_name"
-				while true; do
-					read -p "Desea aplicar los cambios? (y/n): " op
-					if [ "$op" == "y" ]; then
-						eval $final >/dev/null 2>/dev/null
-						break
-					elif [ "$op" == "n" ]; then
-						break
-					else
-						echo "$SYNTAX_ERROR"
-					fi
-				done
+				yndialog  "Desea aplicar los cambios? (y/n): "
+				case $? in
+					0)
+						eval "$final" >/dev/null 2>/dev/null
+						;;
+				esac
 				if $usr_on; then
 					usr_name=$usr_n
 				fi
@@ -592,98 +599,56 @@ consulta () {
 		case $op in
 			1)
 				save=false
-				while true; do
-					read -p "Desea guardar la informacion a un archivo? (y/n): " op
-					case $op in
-						y)
-							save=true
-							read -p "Ingrese nombre del archivo (si no existe se creara): " save_name
-							break
-							;;
-						n)	
-							break
-							;;
-						*)
-							echo "$SYNTAX_ERROR"
-					esac
-				done
-				usrs=($(cut -d: -f1 /etc/passwd))
-				uids=($(cut -d: -f3 /etc/passwd))
-				gids=($(cut -d: -f4 /etc/passwd))
-				coms=($(cut -d: -f5 /etc/passwd))
-				homs=($(cut -d: -f6 /etc/passwd))
-				shls=($(cut -d: -f7 /etc/passwd))				
-				echo "--------------------------"
-				len=${#usrs[@]}
+				yndialog "Desea guardar la informacion a un archivo? (y/n): "
+				case $? in
+					0)
+						save=true
+						read -p "Ingrese nombre del archivo (si no existe se creara): " save_name
+						;;
+				
+				esac
 				if ! $save; then
-					for (( i=0; i<${len}; i++ )); do
-						echo "Login:      ${usrs[$i]}"
-						echo "UID:        ${uids[$i]}"
-						echo "GID:        ${gids[$i]}"
-						echo "Comentario: ${coms[$i]}"
-						echo "Home:       ${homs[$i]}"
-						echo "Shell:      ${shls[$i]}"
+					echo "--------------------------"
+					while read -r line; do
+						echo "Login:      $(echo $line | cut -d: -f1)"
+						echo "UID:        $(echo $line | cut -d: -f3)"
+						echo "GID:        $(echo $line | cut -d: -f4)"
+						echo "Comentario: $(echo $line | cut -d: -f5)"
+						echo "Home:       $(echo $line | cut -d: -f6)"
+						echo "Shell:      $(echo $line | cut -d: -f7)"
 						echo "--------------------------"
-					done 
+					done < /etc/passwd
 				else
-					for (( i=0; i<${len}; i++ )); do
-						echo "Login:      ${usrs[$i]}"
-						echo "UID:        ${uids[$i]}"
-						echo "GID:        ${gids[$i]}"
-						echo "Comentario: ${coms[$i]}"
-						echo "Home:       ${homs[$i]}"
-						echo "Shell:      ${shls[$i]}"
+					echo "--------------------------" > $save_name
+					while read -r line; do
+						echo "Login:      $(echo $line | cut -d: -f1)"
+						echo "UID:        $(echo $line | cut -d: -f3)"
+						echo "GID:        $(echo $line | cut -d: -f4)"
+						echo "Comentario: $(echo $line | cut -d: -f5)"
+						echo "Home:       $(echo $line | cut -d: -f6)"
+						echo "Shell:      $(echo $line | cut -d: -f7)"
 						echo "--------------------------"
-					done >> $save_name
+					done < /etc/passwd > $save_name
 					cat $save_name
 				fi
-				read -p "$ENTER_CONTINUE"
+				read -p "$ENTER_CONTINUE" in
 				;;
 			2)
-				read -p "Ingrese login o uid del usuario a mostrar: " usr
-				usrs=($(cut -d: -f1 /etc/passwd))
-				uids=($(cut -d: -f3 /etc/passwd))
-				us=-1
-				us_len=${#usrs[@]}
-				for (( i=0; i<${us_len}; i++ )); do
-					if [ "$usr" == "${usrs[$i]}" ]; then
-						us=$i
-					fi
-				done
-				if [ "$us" != "-1" ]; then
-					((us++))
-					match="$(sed "${us}q;d" /etc/passwd)"
+				read -p "Ingrese login usuario a mostrar: " usr
+				line=$(grep "^${usr}:" /etc/passwd)
+				if [ $? -eq 0 ]; then
 					echo "--------------------------"
-					echo "Login:      $(echo $match | cut -d: -f1)"
-					echo "UID:        $(echo $match | cut -d: -f3)"
-					echo "GID:        $(echo $match | cut -d: -f4)"
-					echo "Comentario: $(echo $match | cut -d: -f5)"
-					echo "Home:       $(echo $match | cut -d: -f6)"
-					echo "Shell:      $(echo $match | cut -d: -f7)"
+					echo "Login:      $(echo $line | cut -d: -f1)"
+					echo "UID:        $(echo $line | cut -d: -f3)"
+					echo "GID:        $(echo $line | cut -d: -f4)"
+					echo "Comentario: $(echo $line | cut -d: -f5)"
+					echo "Home:       $(echo $line | cut -d: -f6)"
+					echo "Shell:      $(echo $line | cut -d: -f7)"
 					echo "--------------------------"
 				else
-					ui=-1
-					ui_len=${#uids[@]}
-					for (( i=0; i<${ui_len}; i++ )); do
-						if [ "$usr" == "${uids[$i]}" ]; then
-							ui=$i
-						fi
-					done
-					if [ "$ui" != "-1" ]; then
-						((ui++))
-						match="$(sed "${ui}q;d" /etc/passwd)"
-						echo "--------------------------"
-						echo "Login:      $(echo $match | cut -d: -f1)"
-						echo "UID:        $(echo $match | cut -d: -f3)"
-						echo "GID:        $(echo $match | cut -d: -f4)"
-						echo "Comentario: $(echo $match | cut -d: -f5)"
-						echo "Home:       $(echo $match | cut -d: -f6)"
-						echo "Shell:      $(echo $match | cut -d: -f7)"
-						echo "--------------------------"
-					else
-						echo "Usuario no encontrado."
-					fi
-				fi
+					echo "Usuario no encontrado."
+				fi			
+	
 				read -p "$ENTER_CONTINUE" in
 				;;
 			0)
@@ -726,9 +691,8 @@ while true; do
 			break
 			;;
 		*)
-			clear
 			echo "$SYNTAX_ERROR"
-			read
+			read -p "$ENTER_CONTINUE" in
 			;;
 	esac
 done

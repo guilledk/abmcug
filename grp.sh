@@ -5,7 +5,6 @@ alta () {
 
 	#groupadd
 	#-g GID
-	#-p passwd
 	#-r grupo de sistema
 	#group
 
@@ -58,19 +57,6 @@ alta () {
 			return 1
 			;;
 	esac
-
-	#passwd
-	grp_op=false
-	yncdialog "Desea agregar una clave? (y/n/c): " 
-	case $? in
-		0)
-			grp_pas=$(readpasswd "Ingrese clave: ")
-			grp_op=true
-			;;
-		2)
-			return 1
-			;;	
-	esac
 	
 	#system group
 	grp_or=false
@@ -91,9 +77,6 @@ alta () {
 			final="$final -o"
 		fi
 	fi
-	if $grp_op; then
-		final="$final -p $grp_pas"
-	fi
 	if $grp_or; then
 		final="$final -r"
 	fi
@@ -103,6 +86,13 @@ alta () {
 		0)
 			#0: success
 			echo "Grupo creado con exito."
+			#password
+			yncdialog "Desea agregar una clave? (y/n): " 
+			case $? in
+				0)
+					gpasswd $grp_name
+					;;
+			esac
 			;;
 		2)
 			#2: invalid command syntax
@@ -179,7 +169,6 @@ modificar () {
 	#-g GI
 	#-o gid no unica
 	#-n new name
-	#-p passwd
 	#group
 
 	#group name
@@ -239,7 +228,7 @@ modificar () {
 		case $? in
 			0)
 				read -p "Ingrese nuevo nombre para el grupo: " grp_nname
-				if grep -q "^${grp_nname}:" /etc/group; then
+				if ! grep -q "^${grp_nname}:" /etc/group; then
 					grp_on=true
 					break
 				else
@@ -254,37 +243,6 @@ modificar () {
 				;;
 		esac
 	done
-	
-	#passwd
-	grp_op=false
-	shadow_line=$(grep -s $grp_name /etc/gshadow)
-	echo $shadow_line | cut -d: -f2 | grep -x "!"
-	case $? in
-		0) #has passwd
-			yncdialog "Desea cambiar la clave? (y/n/c): " 
-			case $? in
-				0)
-					grp_pas=$("Ingrese nueva clave: ")
-					grp_op=true
-					;;
-				2)
-					return 1
-					;;	
-			esac
-			;;
-		1) #no passwd
-			yncdialog "Desea agregar una clave? (y/n/c): " 
-			case $? in
-				0)
-					grp_pas=$(readpasswd "Ingrese clave: ")
-					grp_op=true
-					;;
-				2)
-					return 1
-					;;	
-			esac
-			;;
-	esac
 
 	final="groupmod "
 	if $grp_og; then
@@ -296,14 +254,31 @@ modificar () {
 	if $grp_on; then
 		final="$final -n $grp_nname"
 	fi
-	if $grp_op; then
-		final="$final -p $grp_pas"
-	fi
+	final="$final $grp_name"
 	eval "$final" >/dev/null 2>/dev/null
 	case $? in
 		0)
 			#0: success
-			echo "Grupo creado con exito."
+			echo "Grupo modificado con exito con exito."
+			if $grp_on; then grp_name=$grp_nname; fi
+			#passwd
+			grp_op=false
+			shadow_line=$(grep "^${grp_name}:" /etc/gshadow)
+			pass=$(echo $shadow_line | cut -d: -f2)
+			if [ "$pass" = "!" ] || [ "$pass" = "*" ]; then
+				yndialog "Desea agregar una clave de acceso? (y/n): "
+				case $? in
+					0)
+						gpasswd $grp_name
+						;;
+				esac
+			else
+				yndialog "Desea cambiar la clave de acceso? (y/n): "
+				case $? in
+					0)
+						gpasswd $grp_name
+				esac
+			fi
 			;;
 		2)
 			#2: invalid command syntax
@@ -332,12 +307,92 @@ modificar () {
 
 }
 
+consulta () {
+	
+	while true; do
+		clear
+		cat menus/group-con	
+		read -p "~$ " op
+		
+		case $op in
+				1)
+					save=false
+					yndialog "Desea guardar la informacion a un archivo? (y/n): "
+					case $? in
+						0)
+							save=true
+							read -p "Ingrese nombre del archivo (si no existe se creara): " save_name
+							;;
+					esac
+					if ! $save; then
+						while read -r line; do
+							cur_grp_name=$(echo $line | cut -d: -f1)
+							echo "--------------------------"
+							echo "Nombre:      $cur_grp_name"
+							shadow_line=$(grep "^${cur_grp_name}:" /etc/gshadow)
+							pass=$(echo $shadow_line | cut -d: -f2)
+							echo "Pass:        $(if [ "$pass" = "!" ] || [ "$pass" = "*" ]; then echo No; else echo Si; fi)"
+							echo "GID:         $(echo $line | cut -d: -f3)"
+							echo "Integrantes: $(echo $line | cut -d: -f4)"
+							echo "--------------------------"
+						done < /etc/group
+					else
+						while read -r line; do
+							cur_grp_name=$(echo $line | cut -d: -f1)
+							echo "--------------------------"
+							echo "Nombre:      $cur_grp_name"
+							shadow_line=$(grep "^${cur_grp_name}:" /etc/gshadow)
+							pass=$(echo $shadow_line | cut -d: -f2)
+							echo "Pass:        $(if [ "$pass" = "!" ] || [ "$pass" = "*" ]; then echo No; else echo Si; fi)"
+							echo "GID:         $(echo $line | cut -d: -f3)"
+							echo "Integrantes: $(echo $line | cut -d: -f4)"
+							echo "--------------------------"
+						done < /etc/group > $save_name
+						cat $save_name
+					fi
+					read -p "$ENTER_CONTINUE" in
+					;;
+				2)
+					read -p "Ingrese nombre del grupo a mostrar: " grp
+					line=$(grep "^${grp}:" /etc/group)
+					if [ $? -eq 0 ]; then
+						echo "--------------------------"
+						echo "Nombre:      $grp"
+						shadow_line=$(grep "^${grp}:" /etc/gshadow)
+						pass=$(echo $shadow_line | cut -d: -f2)
+						echo "Pass:        $(if [ "$pass" = "!" ] || [ "$pass" = "*" ]; then echo No; else echo Si; fi)"
+						echo "GID:         $(echo $line | cut -d: -f3)"
+						echo "Integrantes: $(echo $line | cut -d: -f4)"
+						echo "--------------------------"
+					else	
+						echo "Grupo no encontrado."
+					fi			
+		
+					read -p "$ENTER_CONTINUE" in
+
+					;;
+				0)
+					break
+					;;
+				*)
+					echo "$SYNTAX_ERROR"
+					read -p "$ENTER_CONTINUE" in
+					;;
+		esac
+	done
+	return 0
+
+}
+
 while true; do
 	clear
 	cat menus/group
 	read -p "~$ " op
 
 	case $op in
+		0)
+			break
+			;;
 		1)
 			clear
 			alta
@@ -354,14 +409,9 @@ while true; do
 			clear
 			consulta
 			;;
-		0)
-			clear
-			break
-			;;
 		*)
-			clear
 			echo "$SYNTAX_ERROR"
-			read
+			read -p "$ENTER_CONTINUE" in
 			;;
 	esac
 done

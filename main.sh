@@ -1,5 +1,7 @@
 #!/bin/sh
 
+. "$PWD/libabmc.sh"
+
 while true; do
 	clear
 	cat menus/main
@@ -14,16 +16,14 @@ while true; do
 		2)
 			clear
 			./grp.sh
-			read
 			;;
 		0)
 			clear
 			break
 			;;
 		*)
-			clear
 			echo "Opcion no identificada."
-			read
+			read -p "$ENTER_CONTINUE" in
 			;;
 
 	esac
